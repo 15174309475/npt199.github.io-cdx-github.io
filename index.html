@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>宇宙成因核素暴露年龄计算器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+
+        .calculator {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 0.5rem;
+        }
+
+        .input-group {
+            margin: 1.5rem 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #34495e;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        #result {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #ecf5fb;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .formula {
+            background: #f8f9fa;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <h2>宇宙成因核素暴露年龄计算器</h2>
+        
+        <div class="input-group">
+            <label for="be10">¹⁰Be浓度 (atoms/g)：</label>
+            <input type="number" id="be10" step="1e5" required>
+        </div>
+
+        <div class="input-group">
+            <label for="al26">²⁶Al浓度 (atoms/g)：</label>
+            <input type="number" id="al26" step="1e5" required>
+        </div>
+
+        <div class="input-group">
+            <label for="prod_rate">产率 (atoms/g/yr)：</label>
+            <input type="number" id="prod_rate" step="1e-5" value="4.49" required>
+            <small>默认值：4.49 atoms/g/yr (¹⁰Be陆地产率)</small>
+        </div>
+
+        <button onclick="calculateAge()">计算暴露年龄</button>
+
+        <div id="result"></div>
+
+        <div class="formula">
+            使用公式：
+            t = -(1/λ) * ln(1 - (N * λ)/P)
+            <br>
+            其中：λ=衰变常数，N=核素浓度，P=产率
+        </div>
+    </div>
+
+    <script>
+        // 核素衰变常数（yr⁻¹）
+        const DECAY_CONSTANTS = {
+            'Be10': 4.99e-7,   // ¹⁰Be衰变常数
+            'Al26': 9.83e-7    // ²⁶Al衰变常数
+        };
+
+        function calculateAge() {
+            // 获取输入值
+            const be10 = parseFloat(document.getElementById('be10').value);
+            const al26 = parseFloat(document.getElementById('al26').value);
+            const prodRate = parseFloat(document.getElementById('prod_rate').value);
+
+            // 输入验证
+            if ([be10, al26, prodRate].some(v => v <= 0 || isNaN(v))) {
+                alert("请输入有效的正数值！");
+                return;
+            }
+
+            // 计算两个核素的年龄
+            const ageBe10 = calculateSingleAge(be10, prodRate, DECAY_CONSTANTS.Be10);
+            const ageAl26 = calculateSingleAge(al26, prodRate, DECAY_CONSTANTS.Al26);
+
+            // 显示结果
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <h3>计算结果：</h3>
+                <p>基于¹⁰Be的暴露年龄：<strong>${ageBe10.toFixed(0)} 年</strong></p>
+                <p>基于²⁶Al的暴露年龄：<strong>${ageAl26.toFixed(0)} 年</strong></p>
+                <p>年龄差异：${Math.abs(ageBe10 - ageAl26).toFixed(0)} 年</p>
+                ${getConsistencyNote(ageBe10, ageAl26)}
+            `;
+            resultDiv.style.display = 'block';
+        }
+
+        function calculateSingleAge(N, P, lambda) {
+            // 暴露年龄计算公式
+            if (N * lambda >= P) return Infinity;  处理饱和情况
+            return -(1/lambda) * Math.log(1 - (N * lambda)/P);
+        }
+
+        function getConsistencyNote(age1, age2) {
+            const diff = Math.abs(age1 - age2);
+            let note = "";
+
+            if (diff < 1000) {
+                note = "✅ 年龄结果一致，建议采用平均值";
+            } else if (diff < 5000) {
+                note = "⚠️ 年龄存在显著差异，需检查输入参数";
+            } else {
+                note = "❌ 年龄差异过大，可能存在样品问题或参数错误";
+            }
+
+            return `<div style="margin-top: 1rem; padding: 0.5rem; background: #${diff < 5000 ? 'f8dda9' : 'fad2d2'}; border-radius: 4px;">
+                    ${note}
+                </div>`;
+        }
+    </script>
+</body>
+</html>
