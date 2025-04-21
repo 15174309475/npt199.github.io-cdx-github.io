@@ -149,14 +149,14 @@
 
         function calculateSingleAge(N, P, lambda) {
             // 暴露年龄计算公式
-            if (N * lambda >= P) return Infinity;  处理饱和情况
+            if (N * lambda >= P) return Infinity; // 处理饱和情况
             return -(1/lambda) * Math.log(1 - (N * lambda)/P);
         }
 
         function getConsistencyNote(age1, age2) {
             const diff = Math.abs(age1 - age2);
             let note = "";
-
+            
             if (diff < 1000) {
                 note = "✅ 年龄结果一致，建议采用平均值";
             } else if (diff < 5000) {
@@ -164,7 +164,7 @@
             } else {
                 note = "❌ 年龄差异过大，可能存在样品问题或参数错误";
             }
-
+            
             return `<div style="margin-top: 1rem; padding: 0.5rem; background: #${diff < 5000 ? 'f8dda9' : 'fad2d2'}; border-radius: 4px;">
                     ${note}
                 </div>`;
