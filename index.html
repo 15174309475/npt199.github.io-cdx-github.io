@@ -147,15 +147,18 @@ function validateInput(id, min=null, max=null) {
     return value;
 }
 
-// 大气压力计算 (hPa转g/cm²)
+// 大气压力计算 (返回g/cm²)
 function atmosphericPressure(elevation) {
-    // 计算hPa单位的大气压力（标准海平面压力为1013.25 hPa）
-    const pressure_hPa = 1013.25 * Math.pow(1 - elevation/44330, 5.255);
+    // 标准海平面大气压 (g/cm²)
+    const P0 = 1033.227;
     
-    // 将hPa转换为g/cm² (1 hPa = 1.019716 g/cm²)
-    const pressure_gcm2 = pressure_hPa * 1.019716;
-    
-    return pressure_gcm2;
+    // 使用国际民航组织(ICAO)标准大气模型
+    if (elevation <= 11000) { // 对流层
+        return P0 * Math.pow(1 - 0.0065 * elevation / 288.15, 5.25588);
+    } else { // 平流层
+        const tropopause_pressure = P0 * Math.pow(1 - 0.0065 * 11000 / 288.15, 5.25588);
+        return tropopause_pressure * Math.exp(-(elevation - 11000) / 6341.62);
+    }
 }
 
 // 海拔校正因子 (Lal, 1991)
@@ -180,7 +183,7 @@ function elevationScaling(elevation, latitude) {
     const term3 = (params.a[3] + params.a[4]*Rc + params.a[5]*Math.pow(Rc,2)) * (Math.pow(1033,3) - Math.pow(h,3))/3;
     const term4 = (params.a[6] + params.a[7]*Rc + params.a[8]*Math.pow(Rc,2)) * (Math.pow(1033,4) - Math.pow(h,4))/4;
 
-    return Math.exp(z/* (term1 + term2 + term3 + term4));
+    return Math.exp(z/150) * (term1 + term2 + term3 + term4);
 }
 
 // 纬度校正因子
