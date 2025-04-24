@@ -1,6 +1,333 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>宇宙成因核素综合分析工具</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            max-width: 800px;
+        }
+        .input-section, .result-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .input-group { 
+            margin: 15px 0; 
+        }
+        label {
+            display: inline-block;
+            width: 180px;
+            margin-right: 15px;
+        }
+        input { 
+            width: 200px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button { 
+            padding: 12px 30px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px 0;
+            font-size: 16px;
+        }
+        .result-block {
+            padding: 15px;
+            margin: 15px 0;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        .error { 
+            color: #dc3545; 
+            padding: 12px;
+            background-color: #f8d7da;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>宇宙成因核素综合分析系统</h2>
+
+    <div class="input-section">
+        <h3>基本参数</h3>
+        <div class="input-group">
+            <label for="latitude">地理纬度 (°):</label>
+            <input type="number" id="latitude" min="-90" max="90" step="0.0001">
+        </div>
+        <div class="input-group">
+            <label for="elevation">海拔高度 (m):</label>
+            <input type="number" id="elevation" min="0" step="1">
+        </div>
+        <div class="input-group">
+            <label for="depth">采样深度 (cm):</label>
+            <input type="number" id="depth" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+            <label for="density">岩石密度 (g/cm³):</label>
+            <input type="number" id="density" value="2.7" step="0.1">
+        </div>
+    </div>
+
+    <div class="input-section">
+        <h3>样品参数</h3>
+        <div class="input-group">
+            <label for="be10">¹⁰Be浓度 (atoms/g):</label>
+            <input type="number" id="be10" step="1e5">
+        </div>
+        <div class="input-group">
+            <label for="al26">²⁶Al浓度 (atoms/g):</label>
+            <input type="number" id="al26" step="1e5">
+        </div>
+    </div>
+
+    <button onclick="calculateAll()">开始计算</button>
+    <div id="error" class="error" style="display: none;"></div>
+
+    <div class="result-section" id="results" style="display: none;">
+        <!-- 核素产率结果 -->
+        <div class="result-block" id="production-results">
+            <h3>核素产率计算结果</h3>
+            <div id="production-details"></div>
+        </div>
+
+        <!-- 暴露年龄结果 -->
+        <div class="result-block" id="age-results">
+            <h3>暴露年龄计算结果</h3>
+            <div id="age-details"></div>
+        </div>
+
+        <!-- 侵蚀速率结果 -->
+        <div class="result-block" id="erosion-results">
+            <h3>侵蚀速率计算结果</h3>
+            <div id="erosion-details"></div>
+        </div>
+    </div>
+
+<script>
+// 核素物理参数库
+const NUCLIDE_PARAMS = {
+    '¹⁰Be': {
+        P0: 6.0,       // 标称产率 (atoms/g/yr)
+        lambda: 4.99e-7 // 衰变常数 (yr⁻¹)
+    },
+    '²⁶Al': {
+        P0: 36.8,
+        lambda: 9.83e-7
+    },
+    '¹⁴C': { P0: 20 },
+    '³He': { P0: 124 },
+    '²¹Ne': { P0: 21 },
+    '³⁶Cl': { P0: 54 }
+};
+
+// 输入验证函数
+function validateInput(id, constraints) {
+    const input = document.getElementById(id);
+    const value = parseFloat(input.value);
+    
+    // 基础验证
+    if (isNaN(value)) {
+        input.style.border = "2px solid #dc3545";
+        return null;
+    }
+    
+    // 范围验证
+    if (constraints?.min !== undefined && value < constraints.min) return null;
+    if (constraints?.max !== undefined && value > constraints.max) return null;
+    
+    input.style.border = "1px solid #ced4da";
+    return value;
+}
+
+// 大气压力转换模型
+function calculateAtmosphericPressure(elevation) {
+    return 1013 * Math.pow(1 - elevation/44330, 5.255) * (1033/1013);
+}
+
+// 海拔校正因子 (基于Stone 2000模型)
+function calculateElevationFactor(elevation, latitude) {
+    const h = calculateAtmosphericPressure(elevation);
+    const z = 1033 - h;
+    if (z <= 0) return 1.0;
+
+    const Rc = 14.9 * Math.pow(Math.cos(Math.abs(latitude)*Math.PI/180), 4);
+    const alpha = 10.275;
+    const k = 0.9615;
+    
+    // 第一项计算
+    const term1 = (1.0177e-2 / (1 + Math.exp(-alpha*Math.pow(Rc, -k)))) * z;
+
+    // 第二项多项式计算
+    const coefficients = [
+        8.5236e-6, -6.3670e-7, -7.0814e-9,
+        -9.9182e-9, 9.9250e-10, 2.4925e-11,
+        3.8615e-12, -4.8194e-13, -1.5371e-14
+    ];
+    
+    const term2 = (coefficients[0] + coefficients[1]*Rc + coefficients[2]*Rc**2) * (1033**2 - h**2)/2;
+    const term3 = (coefficients[3] + coefficients[4]*Rc + coefficients[5]*Rc**2) * (1033**3 - h**3)/3;
+    const term4 = (coefficients[6] + coefficients[7]*Rc + coefficients[8]*Rc**2) * (1033**4 - h**4)/4;
+
+    return Math.exp(z/150) * (term1 + term2 + term3 + term4);
+}
+
+// 纬度校正因子
+function calculateLatitudeFactor(latitude) {
+    const Rc = 14.9 * Math.pow(Math.cos(Math.abs(latitude)*Math.PI/180), 4);
+    return 1 - Math.exp(-10.275 * Math.pow(Rc, -0.9615));
+}
+
+// 深度衰减校正
+function calculateDepthFactor(depth, density) {
+    return Math.exp(-(depth * density)/150);
+}
+
+// 暴露年龄计算（稳态模型）
+function calculateExposureAge(concentration, productionRate, decayConstant) {
+    if (productionRate <= 0 || decayConstant <= 0) return null;
+    const ratio = (concentration * decayConstant) / productionRate;
+    if (ratio >= 1) return Infinity;  // 达到饱和状态
+    return -Math.log(1 - ratio) / decayConstant;
+}
+
+// 侵蚀速率计算（双核素法）
+function calculateErosionRate(be10Data, al26Data) {
+    const L = 150; // 衰减长度 (g/cm²)
+    const ratio = (be10Data.N * al26Data.P) / (al26Data.N * be10Data.P);
+    if (ratio <= 1) return Infinity; // 无侵蚀情况
+    return (al26Data.lambda - ratio * be10Data.lambda) / ((ratio - 1)/L);
+}
+
+function calculateAll() {
+    // 重置显示
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+
+    // 验证输入参数
+    const baseParams = {
+        latitude: validateInput('latitude', { min: -90, max: 90 }),
+        elevation: validateInput('elevation', { min: 0 }),
+        depth: validateInput('depth', { min: 0 }),
+        density: validateInput('density', { min: 1.0, max: 3.5 }) || 2.7
+    };
+
+    // 验证样品参数
+    const sampleParams = {
+        be10: validateInput('be10', { min: 0 }),
+        al26: validateInput('al26', { min: 0 })
+    };
+
+    // 错误处理
+    if (Object.values(baseParams).some(v => v === null)) {
+        showError("请检查红色标记的输入参数");
+        return;
+    }
+
+    // 计算校正因子
+    const correctionFactors = {
+        elevation: calculateElevationFactor(baseParams.elevation, baseParams.latitude),
+        latitude: calculateLatitudeFactor(baseParams.latitude),
+        depth: calculateDepthFactor(baseParams.depth, baseParams.density)
+    };
+
+    // 计算各核素产率
+    const productionRates = {};
+    Object.entries(NUCLIDE_PARAMS).forEach(([name, param]) => {
+        productionRates[name] = param.P0 * correctionFactors.elevation 
+                               * correctionFactors.latitude * correctionFactors.depth;
+    });
+
+    // 显示计算结果
+    showResults(productionRates, sampleParams, correctionFactors);
+}
+
+function showResults(productionRates, sampleParams, factors) {
+    const results = document.getElementById('results');
+    results.style.display = 'block';
+
+    // 显示产率结果
+    document.getElementById('production-details').innerHTML = Object.entries(productionRates)
+        .map(([name, rate]) => `<p>${name}: <strong>${rate.toFixed(2)} atoms/g/yr</strong></p>`)
+        .join('');
+
+    // 显示暴露年龄
+    let ageContent = '';
+    if (sampleParams.be10 !== null) {
+        const ageBe = calculateExposureAge(
+            sampleParams.be10,
+            productionRates['¹⁰Be'],
+            NUCLIDE_PARAMS['¹⁰Be'].lambda
+        );
+        ageContent += `<p>¹⁰Be暴露年龄: ${formatAge(ageBe)}</p>`;
+    }
+    if (sampleParams.al26 !== null) {
+        const ageAl = calculateExposureAge(
+            sampleParams.al26,
+            productionRates['²⁶Al'],
+            NUCLIDE_PARAMS['²⁶Al'].lambda
+        );
+        ageContent += `<p>²⁶Al暴露年龄: ${formatAge(ageAl)}</p>`;
+    }
+    document.getElementById('age-details').innerHTML = ageContent || "<p>未提供浓度数据</p>";
+
+    // 显示侵蚀速率
+    if (sampleParams.be10 !== null && sampleParams.al26 !== null) {
+        const epsilon = calculateErosionRate(
+            {
+                N: sampleParams.be10,
+                P: productionRates['¹⁰Be'],
+                lambda: NUCLIDE_PARAMS['¹⁰Be'].lambda
+            },
+            {
+                N: sampleParams.al26,
+                P: productionRates['²⁶Al'],
+                lambda: NUCLIDE_PARAMS['²⁶Al'].lambda
+            }
+        );
+        
+        document.getElementById('erosion-details').innerHTML = `
+            <p>侵蚀速率: ${formatErosionRate(epsilon)}</p>
+            ${epsilon < 0 ? '<p class="error">警告：负值可能表示模型不适用</p>' : ''}
+        `;
+    }
+}
+
+// 辅助格式化函数
+function formatAge(years) {
+    if (years === Infinity) return "＞饱和年龄";
+    if (years > 1e6) return `${(years/1e6).toFixed(2)} 百万年`;
+    if (years > 1e3) return `${(years/1e3).toFixed(2)} 千年`;
+    return `${years.toFixed(0)} 年`;
+}
+
+function formatErosionRate(rate) {
+    if (rate === Infinity) return "＜检测限";
+    return `${rate >= 0 ? '' : '-'}${Math.abs(rate).toExponential(2)} cm/yr`;
+}
+
+function showError(message) {
+    const errorEl = document.getElementById('error');
+    errorEl.innerHTML = message;
+    errorEl.style.display = 'block';
+}
+</script>
+</body>
+</html><!DOCTYPE html>
+<html>
+<head>
     <title>宇宙成因核素产率与暴露年龄计算器</title>
     <style>
         body { 
