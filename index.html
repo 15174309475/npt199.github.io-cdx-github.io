@@ -149,8 +149,17 @@ function validateInput(id, min=null, max=null) {
 
 // 大气压力计算 (hPa转g/cm²)
 function atmosphericPressure(elevation) {
-    const h = 1013 * Math.pow(1 - elevation/44330, 5.255);
-    return h * (1033/1013);
+    // 标准海平面大气压 (g/cm²)
+    const P0 = 1033.227;
+    
+    // 使用国际民航组织(ICAO)标准大气模型
+    // 转换为等效大气深度(g/cm²)
+    if (elevation <= 11000) { // 对流层
+        return P0 * Math.pow(1 - 0.0065 * elevation / 288.15, 5.25588);
+    } else { // 平流层
+        const tropopause_pressure = P0 * Math.pow(1 - 0.0065 * 11000 / 288.15, 5.25588);
+        return tropopause_pressure * Math.exp(-(elevation - 11000) / 6341.62);
+    }
 }
 
 // 海拔校正因子 (Lal, 1991)
