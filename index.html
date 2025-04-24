@@ -30,60 +30,122 @@ function elevationCorrection(elevation, lat) {
     return c > 0 ? Math.exp(-z/c) : 1.0;
 }
 
-// 修复后的侵蚀速率计算函数
+// 计算侵蚀速率（基于双核素法）
 function calculateErosion() {
-    // ...其他代码保持不变...
+    // 重置状态
+    document.getElementById('error-erosion').style.display = 'none';
+    document.getElementById('results-erosion').style.display = 'none';
+    document.querySelectorAll('#erosion-tab input').forEach(i => i.style.border = "1px solid #ccc");
+
+    // 获取输入
+    const nuclide1 = document.getElementById('nuclide1').value;
+    const conc1 = getInputValue('conc1');
+    const nuclide2 = document.getElementById('nuclide2').value;
+    const conc2 = getInputValue('conc2');
+    const lat = getInputValue('latitude-erosion');
+    const elev = getInputValue('elevation-erosion');
+    const depth = getInputValue('depth-erosion');
+
+    // 输入验证
+    const errorEl = document.getElementById('error-erosion');
+    if (conc1 === null || conc2 === null || lat === null || elev === null || depth === null) {
+        errorEl.innerHTML = "错误：请填写所有输入项（必须为数字）";
+        errorEl.style.display = 'block';
+        return;
+    }
     
-    // 添加变量声明
-    let i; 
-    let currentRatio = 0;
+    if (nuclide1 === nuclide2) {
+        errorEl.innerHTML = "错误：请选择两种不同的核素";
+        errorEl.style.display = 'block';
+        return;
+    }
     
-    // 添加输入验证
-    const minRatio = lambda1 / lambda2;
-    if (targetRatio < minRatio) {
-        errorEl.innerHTML = "错误：核素比值过低，可能数据无效";
+    if (Math.abs(lat) > 90) {
+        errorEl.innerHTML = "错误：纬度必须在-90到90度之间";
         errorEl.style.display = 'block';
         return;
     }
 
-    // 更新后的二分法循环
-    for (i = 0; i < maxIterations; i++) {
-        epsilon = (lower + upper) / 2;
-        currentRatio = (lambda1 + epsilon/ATTENUATION_LENGTH) / 
-                      (lambda2 + epsilon/ATTENUATION_LENGTH);
-        
-        if (Math.abs(currentRatio - targetRatio) < tolerance) {
-            foundSolution = true;
-            break;
-        }
-
-        if (currentRatio < targetRatio) {
-            upper = epsilon;
-        } else {
-            lower = epsilon;
-        }
+    if (elev < 0) {
+        errorEl.innerHTML = "错误：海拔不能为负数";
+        errorEl.style.display = 'block';
+        return;
     }
 
-    // 修复单位转换
-    const epsilonCMKYR = (epsilon / ROCK_DENSITY) * 1000; // 正确转换
+    if (depth < 0) {
+        errorEl.innerHTML = "错误：深度不能为负数";
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (conc1 <= 0 || conc2 <= 0) {
+        errorEl.innerHTML = "错误：浓度必须为正数";
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // 计算产率
+    const production = calculateProductionRate(elev, lat, depth);
+    const P1 = production.rates[nuclide1];
+    const P2 = production.rates[nuclide2];
+    const lambda1 = decayConstants[nuclide1];
+    const lambda2 = decayConstants[nuclide2];
     
-    // 添加物理范围验证
-    if (epsilonCMKYR < 0 || epsilonCMKYR > 100) {
-        foundSolution = false;
+    // 计算浓度比
+    const ratio = (conc1 / P1) / (conc2 / P2);
+    
+    // 检查比率是否为1，避免除以零
+    if (Math.abs(ratio - 1) < 1e-6) {
+        errorEl.innerHTML = "错误：核素浓度比率接近1，无法计算侵蚀速率";
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    let epsilon;
+    if (nuclide1 === '10Be' && nuclide2 === '26Al') {
+        // 使用修正后的公式计算侵蚀速率（cm/kyr）
+        epsilon = ( (lambda2 - ratio * lambda1) * ATTENUATION_LENGTH ) / ( (ratio - 1) * ROCK_DENSITY ) * 1000;
+    } else if (nuclide1 === '26Al' && nuclide2 === '10Be') {
+        epsilon = ( (lambda1 - ratio * lambda2) * ATTENUATION_LENGTH ) / ( (ratio - 1) * ROCK_DENSITY ) * 1000;
+    } else {
+        errorEl.innerHTML = "错误：不支持的核素组合";
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    // 检查侵蚀速率是否为负数
+    if (epsilon < 0) {
+        errorEl.innerHTML = "错误：计算结果为负，可能输入数据不适用双核素法";
+        errorEl.style.display = 'block';
+        return;
     }
 
-    // 更新结果显示
+    // 生成结果
+    const displayName1 = nuclide1 === '10Be' ? '¹⁰Be' : '²⁶Al';
+    const displayName2 = nuclide2 === '10Be' ? '¹⁰Be' : '²⁶Al';
+    
     let results = `<h3>${displayName1}-${displayName2}侵蚀速率计算结果:</h3>`;
-    results += `<div class="debug-info">
-        <div>测量比值: ${targetRatio.toFixed(4)}</div>
-        <div>最终比值: ${currentRatio.toFixed(4)}</div>
-        <div>迭代次数: ${i}</div>
-        <div style="color:${foundSolution?'green':'red'}">侵蚀速率: 
-            <b>${epsilonCMKYR.toFixed(2)} cm/kyr</b>
-            ${foundSolution?'':'<span>(可能未收敛)</span>'}
-        </div>
-    </div>`;
+    results += `<div>${displayName1}浓度: <b>${conc1.toExponential(2)} atoms/g</b></div>`;
+    results += `<div>${displayName2}浓度: <b>${conc2.toExponential(2)} atoms/g</b></div>`;
+    results += `<div>${displayName1}产率: <b>${P1.toFixed(2)} atoms/g/yr</b></div>`;
+    results += `<div>${displayName2}产率: <b>${P2.toFixed(2)} atoms/g/yr</b></div>`;
+    results += `<div style="font-size: 1.2em; margin-top: 10px;">侵蚀速率: <b>${epsilon.toFixed(2)} cm/kyr</b></div>`;
     
-    // ...剩余代码...
+    // 显示调试信息
+    results += `
+        <div class="debug-info">
+            <h4>调试信息：</h4>
+            <div>海拔校正因子 = ${production.elevCorr.toFixed(4)}</div>
+            <div>纬度校正因子 = ${production.latCorr.toFixed(4)}</div>
+            <div>深度衰减因子 = ${production.depthCorr.toFixed(4)}</div>
+            <div>${displayName1}衰变常数 = ${lambda1.toExponential(2)} yr⁻¹</div>
+            <div>${displayName2}衰变常数 = ${lambda2.toExponential(2)} yr⁻¹</div>
+            <div>核素比率 = ${ratio.toFixed(4)}</div>
+        </div>
+    `;
+
+    const resultsEl = document.getElementById('results-erosion');
+    resultsEl.innerHTML = results;
+    resultsEl.style.display = 'block';
 }
 </script>
