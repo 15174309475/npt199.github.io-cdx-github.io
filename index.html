@@ -171,9 +171,9 @@ function elevationScaling(elevation, latitude) {
     
     // 计算各分量
     const term1 = (params.n / (1 + Math.exp(-params.alpha*Math.pow(Rc, -params.k)))) * z;
-    const term2 = (params.a[0] + params.a[1]*Rc + params.a[2]*Math.pow(Rc,2)) * (1033**2 - h**2)/2;
-    const term3 = (params.a[3] + params.a[4]*Rc + params.a[5]*Math.pow(Rc,2)) * (1033**3 - h**3)/3;
-    const term4 = (params.a[6] + params.a[7]*Rc + params.a[8]*Math.pow(Rc,2)) * (1033**4 - h**4)/4;
+    const term2 = (params.a[0] + params.a[1]*Rc + params.a[2]*Math.pow(Rc,2)) * (Math.pow(1033,2) - Math.pow(h,2))/2;
+    const term3 = (params.a[3] + params.a[4]*Rc + params.a[5]*Math.pow(Rc,2)) * (Math.pow(1033,3) - Math.pow(h,3))/3;
+    const term4 = (params.a[6] + params.a[7]*Rc + params.a[8]*Math.pow(Rc,2)) * (Math.pow(1033,4) - Math.pow(h,4))/4;
 
     return Math.exp(z/150) * (term1 + term2 + term3 + term4);
 }
@@ -195,7 +195,8 @@ function calculateExposureAge(N, P, lambda) {
     if (lambda === 0) return N / P; // 稳定核素
     
     try {
-        return -Math.log(1 - (N * lambda)/P) / lambda;
+        const age = -Math.log(1 - (N * lambda)/P) / lambda;
+        return isFinite(age) ? age : null;
     } catch {
         return null;
     }
@@ -205,12 +206,13 @@ function calculateExposureAge(N, P, lambda) {
 function calculateErosionRate(be10Data, al26Data) {
     const L = 150; // 衰减长度 (g/cm²)
     const ratio = (be10Data.N * al26Data.P) / (al26Data.N * be10Data.P);
-    return (al26Data.lambda - ratio * be10Data.lambda) / ((ratio - 1)/L);
+    const epsilon = (al26Data.lambda - ratio * be10Data.lambda) / ((ratio - 1)/L);
+    return isFinite(epsilon) ? epsilon : null;
 }
 
 function calculateAll() {
     // 清除旧结果
-    document.querySelectorAll('.error').forEach(el => el.style.display = 'none');
+    document.getElementById('error').style.display = 'none';
     document.getElementById('results').style.display = 'none';
 
     // 获取并验证输入
@@ -225,7 +227,7 @@ function calculateAll() {
 
     // 检查必要参数
     if (Object.values(inputs).slice(0,4).some(v => v === null)) {
-        showError("请正确填写所有基本参数");
+        showError("请正确填写所有基本参数（纬度、海拔、深度、密度）");
         return;
     }
 
@@ -270,7 +272,7 @@ function showResults(inputs, factors, production) {
             production['¹⁰Be'],
             NUCLIDE_DATA['¹⁰Be'].lambda
         );
-        ageResults.push(`¹⁰Be: ${ageBe ? formatAge(ageBe) : '无效'}`);
+        ageResults.push(`¹⁰Be: ${formatAge(ageBe)}`);
     }
     if (inputs.al26 !== null) {
         const ageAl = calculateExposureAge(
@@ -278,7 +280,7 @@ function showResults(inputs, factors, production) {
             production['²⁶Al'],
             NUCLIDE_DATA['²⁶Al'].lambda
         );
-        ageResults.push(`²⁶Al: ${ageAl ? formatAge(ageAl) : '无效'}`);
+        ageResults.push(`²⁶Al: ${formatAge(ageAl)}`);
     }
     
     document.getElementById('age-results').innerHTML = `
@@ -303,8 +305,8 @@ function showResults(inputs, factors, production) {
         
         document.getElementById('erosion-results').innerHTML = `
             <h3>侵蚀速率</h3>
-            <p>${epsilon >= 0 ? 'ε = ' : '警告：'}${formatErosion(epsilon)}</p>
-            ${epsilon < 0 ? '<p class="error">负值可能表示参数不匹配或非稳态侵蚀</p>' : ''}
+            <p>${epsilon !== null ? (epsilon >= 0 ? 'ε = ' + formatErosion(epsilon) : 
+               '警告：' + formatErosion(epsilon) + ' (负值可能表示参数不匹配或非稳态侵蚀)') : '无法计算'}</p>
         `;
     }
 
@@ -318,14 +320,14 @@ function showResults(inputs, factors, production) {
 }
 
 function formatAge(years) {
-    if (!years) return '无效';
+    if (years === null || isNaN(years)) return '无效';
     if (years > 1e6) return `${(years/1e6).toFixed(2)} Myr`;
     if (years > 1e3) return `${(years/1e3).toFixed(2)} kyr`;
     return `${years.toFixed(0)} 年`;
 }
 
 function formatErosion(rate) {
-    if (!rate) return '无法计算';
+    if (rate === null || isNaN(rate)) return '无效';
     return `${Math.abs(rate).toExponential(2)} cm/yr`;
 }
 
