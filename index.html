@@ -181,7 +181,7 @@ function calculateElevationFactor(elevation, latitude) {
     const term3 = (coefficients[3] + coefficients[4]*Rc + coefficients[5]*Rc**2) * (1033**3 - h**3)/3;
     const term4 = (coefficients[6] + coefficients[7]*Rc + coefficients[8]*Rc**2) * (1033**4 - h**4)/4;
 
-    return Math.exp(z/150) * (term1 + term2 + term3 + term4);
+    return Math.exp(z/(1 * (term1 + term2 + term3 + term4));
 }
 
 // 纬度校正因子
