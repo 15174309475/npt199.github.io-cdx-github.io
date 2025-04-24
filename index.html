@@ -175,7 +175,7 @@ function elevationScaling(elevation, latitude) {
     const term3 = (params.a[3] + params.a[4]*Rc + params.a[5]*Math.pow(Rc,2)) * (Math.pow(1033,3) - Math.pow(h,3))/3;
     const term4 = (params.a[6] + params.a[7]*Rc + params.a[8]*Math.pow(Rc,2)) * (Math.pow(1033,4) - Math.pow(h,4))/4;
 
-    return Math.exp(z/150) * (term1 + term2 + term3 + term4);
+    return Math.exp(z/* (term1 + term2 + term3 + term4));
 }
 
 // 纬度校正因子
