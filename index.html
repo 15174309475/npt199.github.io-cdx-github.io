@@ -112,6 +112,28 @@ const NUCLIDE_DATA = {
         P0: 36.8,
         lambda: 9.83e-7
     }
+
+ '¹⁴C': {
+        P0: 20,
+      //  lambda: 1.209e-4 // 半衰期5730年
+    },
+    '³He': {
+        P0: 124,
+  //      lambda: 0  // 稳定核素
+    },
+    '²¹Ne': {
+        P0: 21,
+    //    lambda: 0  // 稳定核素
+    },
+    '³⁶Cl': {
+        P0: 54,
+    //    lambda: 2.303e-6 // 半衰期3.01e5年
+    }
+
+
+
+
+    
 };
 
 // 输入验证函数
@@ -238,6 +260,14 @@ function showResults(inputs, factors, production) {
         <h3>校正产率 (atoms/g/yr)</h3>
         <p>¹⁰Be: ${production['¹⁰Be'].toFixed(2)}</p>
         <p>²⁶Al: ${production['²⁶Al'].toFixed(2)}</p>
+         <p>¹⁴C: ${production['¹⁴C'].toFixed(2)}</p>
+          <p>³He: ${production['³He'].toFixed(2)}</p>
+           <p>²¹Ne: ${production['²¹Ne'].toFixed(2)}</p>
+            <p>³⁶Cl: ${production['¹⁰Be'].toFixed(2)}</p>
+
+
+
+        
     `;
 
     // 显示年龄计算结果
